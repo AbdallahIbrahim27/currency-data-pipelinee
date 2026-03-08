@@ -1,0 +1,51 @@
+services:
+
+  postgres:
+    image: postgres:15
+    container_name: currency_postgres
+    restart: always
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    networks:
+      - backend
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  etl:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: currency_etl
+    restart: on-failure:3
+    env_file:
+      - ../.env
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../data:/app/data
+      - ../scripts:/app/scripts
+    command: >
+      sh -c "python /app/scripts/extract.py &&
+             python /app/scripts/transform.py &&
+             python /app/scripts/load.py"
+
+volumes:
+  pgdata:
+
+networks:
+  backend:
+    driver: bridge
