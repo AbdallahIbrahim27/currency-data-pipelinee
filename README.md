@@ -1,37 +1,79 @@
 # 💱 Currency Data Pipeline
 
-An automated, containerized ETL pipeline that fetches, processes, and stores currency exchange rate data using Python and Docker.
+> An automated, containerized ETL pipeline that fetches, processes, and stores currency exchange rate data using **Python** and **Docker**.
+
+[![Python](https://img.shields.io/badge/Python-3.x-blue?style=flat-square&logo=python)](https://python.org)
+[![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=flat-square&logo=docker)](https://docker.com)
+[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 ---
 
-## 📌 Overview
+## 📌 Table of Contents
 
-This project implements an end-to-end data pipeline for currency exchange rates. It extracts live or historical forex data from an external API, applies transformations and validation, and loads the results into a target data store — all orchestrated inside Docker containers for easy, reproducible deployment.
+- [Overview](#-overview)
+- [Architecture](#-architecture)
+- [Project Structure](#-project-structure)
+- [Tech Stack](#-tech-stack)
+- [Pipeline Stages](#-pipeline-stages)
+- [Database Schema](#-database-schema)
+- [Prerequisites](#-prerequisites)
+- [Environment Variables](#-environment-variables)
+- [How to Run](#-how-to-run)
+- [Contributing](#-contributing)
+
+---
+
+## 🧭 Overview
+
+This project implements an end-to-end **ETL (Extract → Transform → Load)** pipeline for currency exchange rates. It:
+
+1. **Extracts** live forex rates from an external currency API
+2. **Transforms** and validates the raw data
+3. **Loads** clean records into a PostgreSQL database
+
+Everything runs inside **Docker containers** for fully reproducible deployment.
+
+---
+
+## 🏗 Architecture
 
 ```
-[Currency API] ──► [Extract] ──► [Transform] ──► [Load / Store]
-                                                        │
-                                              [PostgreSQL / CSV / DB]
+┌─────────────────────────────────────────────────────────────────┐
+│                    DOCKER COMPOSE ENVIRONMENT                   │
+│                                                                 │
+│   ┌──────────┐    ┌──────────┐    ┌───────────┐    ┌────────┐  │
+│   │  Forex   │───▶│ Extract  │───▶│ Transform │───▶│  Load  │  │
+│   │   API    │    │          │    │           │    │        │  │
+│   └──────────┘    └──────────┘    └───────────┘    └───┬────┘  │
+│   (external)      extract.py      transform.py         │       │
+│                   raw JSON        clean DataFrame       │       │
+│                                                         ▼       │
+│                                                  ┌──────────┐  │
+│                   ┌──────────────┐               │PostgreSQL│  │
+│                   │  Scheduler   │──── triggers ▶│   (db)   │  │
+│                   │(APScheduler) │               └──────────┘  │
+│                   └──────────────┘                              │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🗂️ Project Structure
+## 🗂 Project Structure
 
 ```
 currency-data-pipelinee/
 │
-├── docker/                  # Docker Compose and service configurations
-│   └── docker-compose.yml
+├── docker/
+│   └── docker-compose.yml      # Defines pipeline + database services
 │
-├── scripts/                 # Python ETL scripts
-│   ├── extract.py           # Fetches currency data from the API
-│   ├── transform.py         # Cleans and normalizes the raw data
-│   └── load.py              # Loads processed data into the target store
+├── scripts/
+│   ├── extract.py              # Stage 1: Fetch data from currency API
+│   ├── transform.py            # Stage 2: Clean & normalize raw data
+│   └── load.py                 # Stage 3: Write records to database
 │
-├── Dockerfile               # Container image definition for the pipeline
-├── requirements.txt         # Python dependencies
-├── .gitignore
+├── Dockerfile                  # Python image with all dependencies
+├── requirements.txt            # pip dependencies
+├── .gitignore                  # Excludes .env, __pycache__, etc.
 └── README.md
 ```
 
@@ -39,155 +81,239 @@ currency-data-pipelinee/
 
 ## ⚙️ Tech Stack
 
-| Component     | Technology              |
-|---------------|-------------------------|
-| Language       | Python 3.x              |
-| Containerization | Docker & Docker Compose |
-| Data Source   | Currency Exchange API   |
-| Data Processing | Pandas / Requests       |
-| Storage       | PostgreSQL / CSV        |
+| Layer | Technology | Purpose |
+|---|---|---|
+| Language | Python 3.x | All ETL logic |
+| HTTP Client | `requests` | Fetching API data |
+| Data Processing | `pandas` | Cleaning & transforming data |
+| Database Driver | `psycopg2` / `SQLAlchemy` | PostgreSQL connection & upsert |
+| Containerization | Docker + Compose | Reproducible runtime |
+| Database | PostgreSQL | Persistent storage |
+| Scheduling | APScheduler / cron | Automated pipeline runs |
+| Config | `python-dotenv` | Environment variable management |
 
 ---
 
-## 🔧 Prerequisites
+## 🔄 Pipeline Stages
 
-Make sure you have the following installed before running the project:
+### Stage 1 — Extract (`scripts/extract.py`)
 
-- [Docker](https://docs.docker.com/get-docker/) (v20.10+)
-- [Docker Compose](https://docs.docker.com/compose/install/) (v2.0+)
-- Python 3.8+ *(only if running locally without Docker)*
-- A valid API key from your currency data provider (e.g., [ExchangeRate-API](https://www.exchangerate-api.com/), [Fixer.io](https://fixer.io/), or [Open Exchange Rates](https://openexchangerates.org/))
+Connects to a currency exchange rate API and retrieves live forex data via HTTP GET.
 
----
+- Reads `API_KEY` and `BASE_CURRENCY` from environment variables
+- Constructs the API request with query parameters
+- Handles HTTP errors with retry logic
+- Returns raw JSON for the next stage
 
-## 🚀 Getting Started
+```python
+import requests, os
+from dotenv import load_dotenv
 
-### 1. Clone the Repository
+load_dotenv()
 
-```bash
-git clone https://github.com/AbdallahIbrahim27/currency-data-pipelinee.git
-cd currency-data-pipelinee
+def fetch_rates(base="USD"):
+    url = f"https://api.exchangerate-api.com/v4/latest/{base}"
+    headers = {"Authorization": f"Bearer {os.getenv('API_KEY')}"}
+    response = requests.get(url, headers=headers, timeout=10)
+    response.raise_for_status()   # raises on 4xx / 5xx
+    return response.json()        # { "rates": {...}, "date": "..." }
 ```
 
-### 2. Configure Environment Variables
+---
 
-Create a `.env` file in the project root and fill in your credentials:
+### Stage 2 — Transform (`scripts/transform.py`)
+
+Converts the raw API response into a clean, typed, structured DataFrame.
+
+- Flattens nested JSON into tabular rows
+- Validates currency codes against ISO 4217
+- Casts rate values to `float`, filters nulls and zeroes
+- Adds ingestion timestamp and source metadata
+
+```python
+import pandas as pd
+from datetime import datetime
+
+def transform_rates(raw: dict) -> pd.DataFrame:
+    records = [
+        {
+            "base":       raw["base"],
+            "target":     currency,
+            "rate":       float(rate),
+            "fetched_at": datetime.utcnow(),
+            "source":     "exchangerate-api"
+        }
+        for currency, rate in raw["rates"].items()
+        if rate and rate > 0
+    ]
+    return pd.DataFrame(records)
+```
+
+---
+
+### Stage 3 — Load (`scripts/load.py`)
+
+Writes the cleaned DataFrame to PostgreSQL using upsert logic to prevent duplicates.
+
+- Connects using env-based credentials
+- Creates `currency_rates` table if it doesn't exist
+- Executes `INSERT ... ON CONFLICT DO UPDATE`
+- Logs inserted / updated / skipped row counts
+
+```python
+from sqlalchemy import create_engine
+import os
+
+def load_to_db(df):
+    engine = create_engine(
+        f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
+        f"@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+    )
+    with engine.begin() as conn:
+        df.to_sql("currency_rates", conn,
+                  if_exists="append", index=False, method="multi")
+    print(f"✅ Loaded {len(df)} records")
+```
+
+---
+
+## 🗄 Database Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS currency_rates (
+    id          SERIAL PRIMARY KEY,
+    base        VARCHAR(3)     NOT NULL,            -- e.g. 'USD'
+    target      VARCHAR(3)     NOT NULL,            -- e.g. 'EUR'
+    rate        NUMERIC(18,8)  NOT NULL,            -- e.g. 0.92341200
+    fetched_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    source      VARCHAR(50),
+    UNIQUE (base, target, fetched_at)
+);
+
+-- Fast time-range queries
+CREATE INDEX IF NOT EXISTS idx_rates_time ON currency_rates (fetched_at DESC);
+
+-- Fast currency-pair lookups
+CREATE INDEX IF NOT EXISTS idx_rates_pair ON currency_rates (base, target);
+```
+
+---
+
+## ✅ Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) v20.10+
+- [Docker Compose](https://docs.docker.com/compose/install/) v2.0+
+- Python 3.8+ *(only for local non-Docker execution)*
+- A valid API key from a forex provider:
+  - [ExchangeRate-API](https://www.exchangerate-api.com/)
+  - [Fixer.io](https://fixer.io/)
+  - [Open Exchange Rates](https://openexchangerates.org/)
+
+---
+
+## 🔐 Environment Variables
+
+Create a `.env` file in the project root — it is already listed in `.gitignore` and must **never** be committed.
 
 ```env
 # Currency API
 API_KEY=your_api_key_here
 BASE_CURRENCY=USD
 
-# Database (if applicable)
-DB_HOST=localhost
+# PostgreSQL
+DB_HOST=db
 DB_PORT=5432
 DB_NAME=currency_db
 DB_USER=postgres
-DB_PASSWORD=your_password
+DB_PASSWORD=changeme
+
+# Optional
+LOG_LEVEL=INFO
 ```
 
-> ⚠️ **Never commit your `.env` file.** It is already listed in `.gitignore`.
+| Variable | Description |
+|---|---|
+| `API_KEY` | Authentication key for the currency API |
+| `BASE_CURRENCY` | Base currency code, e.g. `USD` |
+| `DB_HOST` | PostgreSQL host (`db` inside Docker) |
+| `DB_PORT` | PostgreSQL port, default `5432` |
+| `DB_NAME` | Target database name |
+| `DB_USER` | PostgreSQL username |
+| `DB_PASSWORD` | PostgreSQL password |
+| `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
 
 ---
 
-## 🐳 Running with Docker (Recommended)
+## 🚀 How to Run
 
-### Build and Start All Services
+### Option 1 — Docker (Recommended)
 
 ```bash
+# 1. Clone the repository
+git clone https://github.com/AbdallahIbrahim27/currency-data-pipelinee.git
+cd currency-data-pipelinee
+
+# 2. Set up environment variables
+cp .env.example .env
+# edit .env with your values
+
+# 3. Build and start all services
 docker-compose -f docker/docker-compose.yml up --build
-```
 
-This will:
-1. Build the pipeline image from the `Dockerfile`
-2. Start all required services (database, pipeline runner)
-3. Execute the ETL pipeline automatically
-
-### Run in Detached Mode
-
-```bash
+# 4. Run in background
 docker-compose -f docker/docker-compose.yml up -d --build
-```
 
-### Stop All Services
+# 5. View logs
+docker-compose -f docker/docker-compose.yml logs -f
 
-```bash
+# 6. Stop all services
 docker-compose -f docker/docker-compose.yml down
 ```
 
-### View Logs
+### Option 2 — Local Python
 
 ```bash
-docker-compose -f docker/docker-compose.yml logs -f
-```
-
----
-
-## 🐍 Running Locally (Without Docker)
-
-### 1. Create and Activate a Virtual Environment
-
-```bash
+# 1. Create and activate a virtual environment
 python -m venv venv
-source venv/bin/activate        # On Windows: venv\Scripts\activate
-```
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
-### 2. Install Dependencies
-
-```bash
+# 2. Install dependencies
 pip install -r requirements.txt
-```
 
-### 3. Run the Pipeline
-
-Execute the scripts in order:
-
-```bash
-# Step 1: Extract data from the currency API
+# 3. Run each stage in order
 python scripts/extract.py
-
-# Step 2: Transform and clean the data
 python scripts/transform.py
-
-# Step 3: Load data into the target store
 python scripts/load.py
 ```
 
-Or run them all together if a main entry point is provided:
+### Useful Docker Commands
 
-```bash
-python scripts/main.py
-```
-
----
-
-## 📊 Pipeline Stages
-
-### 1. Extract
-- Connects to the currency exchange rate API
-- Fetches rates for configured currency pairs
-- Saves raw response data for processing
-
-### 2. Transform
-- Parses and validates the raw API response
-- Normalizes currency codes and rate values
-- Handles missing values and data type conversion
-- Adds metadata (timestamps, source info)
-
-### 3. Load
-- Inserts cleaned records into the target database or CSV file
-- Handles upserts to avoid duplicate entries
-- Logs pipeline run statistics
+| Action | Command |
+|---|---|
+| Start in background | `docker-compose -f docker/docker-compose.yml up -d` |
+| Stop all services | `docker-compose -f docker/docker-compose.yml down` |
+| Stop + remove volumes | `docker-compose -f docker/docker-compose.yml down -v` |
+| Rebuild image | `docker-compose -f docker/docker-compose.yml build --no-cache` |
+| Shell into container | `docker exec -it <container_name> bash` |
+| Check running containers | `docker ps` |
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Commit your changes: `git commit -m "Add your feature"`
-4. Push to the branch: `git push origin feature/your-feature`
-5. Open a Pull Request
+```bash
+# 1. Fork the repository on GitHub
+
+# 2. Create a feature branch
+git checkout -b feature/your-feature-name
+
+# 3. Commit your changes
+git add .
+git commit -m "feat: describe your change"
+
+# 4. Push and open a Pull Request
+git push origin feature/your-feature-name
+```
 
 ---
 
@@ -199,5 +325,4 @@ This project is open source and available under the [MIT License](LICENSE).
 
 ## 👤 Author
 
-**Abdallah Ibrahim**  
-GitHub: [@AbdallahIbrahim27](https://github.com/AbdallahIbrahim27)
+**Abdallah Ibrahim** — [@AbdallahIbrahim27](https://github.com/AbdallahIbrahim27)
