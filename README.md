@@ -181,25 +181,6 @@ python scripts/main.py
 
 ---
 
-## 🧪 Running Tests
-
-```bash
-# If tests are included
-pytest tests/ -v
-```
-
----
-
-## 📝 Logging
-
-The pipeline writes execution logs to the console and optionally to a log file. Log levels can be adjusted via the `.env` file:
-
-```env
-LOG_LEVEL=INFO   # Options: DEBUG, INFO, WARNING, ERROR
-```
-
----
-
 ## 🤝 Contributing
 
 1. Fork the repository
