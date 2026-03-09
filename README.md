@@ -66,7 +66,7 @@ currency-data-pipelinee/
 ├── docker/
 │   └── docker-compose.yml      # Defines pipeline + database services
 │
-├── scripts/
+├── src/
 │   ├── extract.py              # Stage 1: Fetch data from currency API
 │   ├── transform.py            # Stage 2: Clean & normalize raw data
 │   └── load.py                 # Stage 3: Write records to database
@@ -96,7 +96,7 @@ currency-data-pipelinee/
 
 ## 🔄 Pipeline Stages
 
-### Stage 1 — Extract (`scripts/extract.py`)
+### Stage 1 — Extract (`src/extract.py`)
 
 Connects to a currency exchange rate API and retrieves live forex data via HTTP GET.
 
@@ -121,7 +121,7 @@ def fetch_rates(base="USD"):
 
 ---
 
-### Stage 2 — Transform (`scripts/transform.py`)
+### Stage 2 — Transform (`src/transform.py`)
 
 Converts the raw API response into a clean, typed, structured DataFrame.
 
@@ -151,7 +151,7 @@ def transform_rates(raw: dict) -> pd.DataFrame:
 
 ---
 
-### Stage 3 — Load (`scripts/load.py`)
+### Stage 3 — Load (`src/load.py`)
 
 Writes the cleaned DataFrame to PostgreSQL using upsert logic to prevent duplicates.
 
@@ -281,9 +281,9 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # 3. Run each stage in order
-python scripts/extract.py
-python scripts/transform.py
-python scripts/load.py
+python src/extract.py
+python src/transform.py
+python src/load.py
 ```
 
 ### Useful Docker Commands

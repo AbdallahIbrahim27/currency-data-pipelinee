@@ -37,11 +37,11 @@ services:
         condition: service_healthy
     volumes:
       - ../data:/app/data
-      - ../scripts:/app/scripts
+      - ../src:/app/src
     command: >
-      sh -c "python /app/scripts/extract.py &&
-             python /app/scripts/transform.py &&
-             python /app/scripts/load.py"
+      sh -c "python /app/src/extract.py &&
+             python /app/src/transform.py &&
+             python /app/src/load.py"
 
 volumes:
   pgdata:
